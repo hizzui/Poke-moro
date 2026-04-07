@@ -1,4 +1,4 @@
-# Pomodoro Animais
+# DIB
 
 Aplicativo web com técnica Pomodoro e sistema de gamificação com animais.
 
