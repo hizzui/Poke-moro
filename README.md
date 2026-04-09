@@ -1,5 +1,7 @@
 # DIB
 
+![WhatsApp Image 2026-04-07 at 14 08 22](https://github.com/user-attachments/assets/e2a32aea-788d-4d9b-a0dd-996316c4891d)
+
 Aplicativo web com técnica Pomodoro e sistema de gamificação com animais.
 
 ## Funcionalidades
