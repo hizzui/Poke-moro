@@ -2,36 +2,23 @@
 
 ![WhatsApp Image 2026-04-07 at 14 08 22](https://github.com/user-attachments/assets/e2a32aea-788d-4d9b-a0dd-996316c4891d)
 
-Aplicativo web com técnica Pomodoro e sistema de gamificação com animais.
+# Gamified Pomodoro Platform
 
-## Funcionalidades
+A full-stack web application featuring a customized Pomodoro timer integrated with an animal-themed gamification progression system.
 
-- Timer Pomodoro (25 min foco + 5 min pausa, customizável)
-- Seleção entre 3 animais (Pássaro, Coruja, Raposa)
-- Sistema de XP e Níveis (10 XP por minuto)
-- Persistência automática com localStorage
-- To-do list integrada
-- Interface minimalista responsiva  
+## 🚀 Features
 
-## Como Executar
+- **Customizable Pomodoro Timer:** 25-minute focus blocks and 5-minute break sessions tailored to user needs.
+- **Companion Selection:** Choose between 3 custom companion animals (Bird, Owl, Fox).
+- **XP & Leveling System:** Algorithmic level progression rewarding 10 XP per focus minute.
+- **Auto-Persistence:** Automated local data backup and state management powered by localStorage.
+- **Integrated To-Do List:** Built-in task tracking seamlessly connected to the focus ecosystem.
+- **Minimalist Responsive UI:** Immersive layout optimized for both desktop and mobile viewports.
 
-1. Instalar dependências:
+## 💻 Getting Started
+
+1. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
-```
-
-2. Rodar o servidor:
-```bash
-python api/index.py
-```
-
-3. Acessar em: http://localhost:8000
-
-## Tecnologias
-
-Backend: FastAPI, Uvicorn  
-Frontend: HTML5, JavaScript, Tailwind CSS  
-Recursos: GSAP (animações), Three.js (fundo 3D), Lenis (scroll suave)  
-Armazenamento: localStorage
 
 
