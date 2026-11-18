@@ -1,5 +1,5 @@
 """
-Dib — Gamified Pokémon Pomodoro Timer & Task Tracker built with Streamlit and SQLite.
+Poke-moro — Gamified Pokémon Pomodoro Timer & Task Tracker built with Streamlit and SQLite.
 Responsive across desktop and mobile viewports.
 """
 
@@ -24,7 +24,7 @@ from storage import (
 )
 
 st.set_page_config(
-    page_title="Dib — Pokémon Pomodoro & Task Tracker",
+    page_title="Poke-moro — Pokémon Pomodoro & Task Tracker",
     page_icon="🔴",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -300,7 +300,7 @@ def main() -> None:
         f"""
         <div class="dib-header">
             <div>
-                <p class="dib-title">🔴 Dib — PokéFocus Trainer</p>
+                <p class="dib-title">🔴 Poke-moro — PokéFocus Trainer</p>
                 <p class="dib-subtitle">Train your partner Pokémon through deep focus sessions (+{XP_PER_FOCUS_MINUTE} EXP / min)</p>
             </div>
             <span class="dib-badge">{current_stage.pokedex_code} {current_stage.name} • Lv. {level_info.level}</span>
