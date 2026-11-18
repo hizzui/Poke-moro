@@ -1,7 +1,17 @@
 """
-Poke-moro — Modern Anime Pokédex & Focus Timer built 100% in Pure Python with Flet & HTTPX.
-Features zero-flicker granular state updates, in-memory async caching, neighbor preloading,
-Glassmorphism Rotom-Dex UI, dynamic type-based radial gradients, and an integrated Pomodoro timer.
+Poké-moro — Sleek Rotom-OS & Pokémon Sleep Inspired Pomodoro Timer (100% Pure Python + Flet).
+Designed following Apple Human Interface Guidelines:
+- Single frameless glassmorphic vertical card (width=380, border_radius=32) with edge-to-edge top hero stage
+- Dynamic atmospheric type gradient & giant translucent minimalist Pokéball watermark (opacity=0.07)
+- High-presence animated Pokémon companion (145x145) with crisp pixel filtering and soft floor shadow
+- Unified Segmented Control mode selector, frameless 68px protagonist timer, and 52px tactile action pill
+- 4 mini-Pokéball cycle indicators, header micro-actions (⚡ instant evolution test & 🔍 modal search dialog)
+- Zero-flicker single-init control tree with in-memory async PokéAPI caching
+
+Install dependencies:
+    pip install flet httpx
+Run application:
+    python main.py
 """
 
 from __future__ import annotations
@@ -9,58 +19,133 @@ from __future__ import annotations
 import asyncio
 import os
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import flet as ft
 import httpx
 
 # ---------------------------------------------------------------------------
-# Constants & Anime Type Color Themes
+# Flet Modern Compatibility Shims (Supports Flet 0.24.x through 0.27+)
+# ---------------------------------------------------------------------------
+if not hasattr(ft, "Colors") and hasattr(ft, "colors"):
+    ft.Colors = ft.colors  # type: ignore[attr-defined]
+if not hasattr(ft, "Icons") and hasattr(ft, "icons"):
+    ft.Icons = ft.icons  # type: ignore[attr-defined]
+
+Colors = ft.Colors
+Icons = ft.Icons
+
+# ---------------------------------------------------------------------------
+# Constants, Atmospheric Type Palettes & Starter Lines
 # ---------------------------------------------------------------------------
 POKEAPI_BASE = "https://pokeapi.co/api/v2"
-MAX_POKEMON_ID = 1025
+MAX_ANIMATED_ID = 649
+CYCLES_PER_STREAK = 4
 
-Icons = getattr(ft, "Icons", getattr(ft, "icons", None))
-
-TYPE_PALETTE: Dict[str, Dict[str, str]] = {
-    "fire":     {"label": "FIRE",     "primary": "#FF5722", "secondary": "#B91C1C", "bg_dark": "#1F0909"},
-    "water":    {"label": "WATER",    "primary": "#00B4D8", "secondary": "#0369A1", "bg_dark": "#071521"},
-    "grass":    {"label": "GRASS",    "primary": "#10B981", "secondary": "#047857", "bg_dark": "#071C15"},
-    "electric": {"label": "ELECTRIC", "primary": "#FACC15", "secondary": "#CA8A04", "bg_dark": "#1D1907"},
-    "ghost":    {"label": "GHOST",    "primary": "#A855F7", "secondary": "#6B21A8", "bg_dark": "#140921"},
-    "psychic":  {"label": "PSYCHIC",  "primary": "#EC4899", "secondary": "#BE185D", "bg_dark": "#1F0916"},
-    "dragon":   {"label": "DRAGON",   "primary": "#6366F1", "secondary": "#3730A3", "bg_dark": "#0B0D24"},
-    "dark":     {"label": "DARK",     "primary": "#94A3B8", "secondary": "#334155", "bg_dark": "#0B0F17"},
-    "fairy":    {"label": "FAIRY",    "primary": "#F472B6", "secondary": "#DB2777", "bg_dark": "#1F0B18"},
-    "fighting": {"label": "FIGHTING", "primary": "#F97316", "secondary": "#C2410C", "bg_dark": "#1F0E07"},
-    "steel":    {"label": "STEEL",    "primary": "#38BDF8", "secondary": "#475569", "bg_dark": "#0D1520"},
-    "ice":      {"label": "ICE",      "primary": "#67E8F9", "secondary": "#0891B2", "bg_dark": "#071A21"},
-    "poison":   {"label": "POISON",   "primary": "#C084FC", "secondary": "#7E22CE", "bg_dark": "#170924"},
-    "ground":   {"label": "GROUND",   "primary": "#FBBF24", "secondary": "#B45309", "bg_dark": "#1C1408"},
-    "rock":     {"label": "ROCK",     "primary": "#D97706", "secondary": "#78350F", "bg_dark": "#1A1208"},
-    "bug":      {"label": "BUG",      "primary": "#84CC16", "secondary": "#4D7C0F", "bg_dark": "#111A08"},
-    "flying":   {"label": "FLYING",   "primary": "#818CF8", "secondary": "#4F46E5", "bg_dark": "#0D1024"},
-    "normal":   {"label": "NORMAL",   "primary": "#94A3B8", "secondary": "#475569", "bg_dark": "#0F141C"},
+POMODORO_MODES: Dict[str, Dict[str, Any]] = {
+    "focus":       {"label": "Foco 25m",  "seconds": 25 * 60, "override_hex": None},
+    "short_break": {"label": "Pausa 5m",  "seconds": 5 * 60,  "override_hex": "#10B981"},
+    "long_break":  {"label": "Longa 15m", "seconds": 15 * 60, "override_hex": "#38BDF8"},
 }
 
-STAT_CONFIG: List[Dict[str, str]] = [
-    {"key": "hp",              "label": "HP",      "color": "#EF4444"},
-    {"key": "attack",          "label": "Attack",  "color": "#F97316"},
-    {"key": "defense",         "label": "Defense", "color": "#EAB308"},
-    {"key": "special-attack",  "label": "Sp. Atk", "color": "#3B82F6"},
-    {"key": "special-defense", "label": "Sp. Def", "color": "#10B981"},
-    {"key": "speed",           "label": "Speed",   "color": "#EC4899"},
+TYPE_THEMES: Dict[str, Dict[str, str]] = {
+    "fire":     {"label": "FIRE",     "accent": "#FF6B35", "grad_top": "#4D2212", "grad_mid": "#241313"},
+    "water":    {"label": "WATER",    "accent": "#38BDF8", "grad_top": "#0F3156", "grad_mid": "#111D30"},
+    "grass":    {"label": "GRASS",    "accent": "#34D399", "grad_top": "#0F3D2E", "grad_mid": "#112221"},
+    "electric": {"label": "ELECTRIC", "accent": "#FACC15", "grad_top": "#4A3B0F", "grad_mid": "#221E12"},
+    "ghost":    {"label": "GHOST",    "accent": "#C084FC", "grad_top": "#321852", "grad_mid": "#1B132B"},
+    "psychic":  {"label": "PSYCHIC",  "accent": "#F472B6", "grad_top": "#4A153B", "grad_mid": "#231224"},
+    "dragon":   {"label": "DRAGON",   "accent": "#818CF8", "grad_top": "#1E225A", "grad_mid": "#141730"},
+    "dark":     {"label": "DARK",     "accent": "#94A3B8", "grad_top": "#1E293B", "grad_mid": "#131824"},
+    "fairy":    {"label": "FAIRY",    "accent": "#F9A8D4", "grad_top": "#4A1936", "grad_mid": "#231322"},
+    "fighting": {"label": "FIGHTING", "accent": "#FB923C", "grad_top": "#4A2012", "grad_mid": "#231514"},
+    "steel":    {"label": "STEEL",    "accent": "#93C5FD", "grad_top": "#1E2D3D", "grad_mid": "#141B26"},
+    "ice":      {"label": "ICE",      "accent": "#67E8F9", "grad_top": "#0E3A47", "grad_mid": "#11212B"},
+    "poison":   {"label": "POISON",   "accent": "#C084FC", "grad_top": "#35164D", "grad_mid": "#1C1329"},
+    "ground":   {"label": "GROUND",   "accent": "#FBBF24", "grad_top": "#422C0F", "grad_mid": "#201912"},
+    "rock":     {"label": "ROCK",     "accent": "#F59E0B", "grad_top": "#3D2710", "grad_mid": "#1E1712"},
+    "bug":      {"label": "BUG",      "accent": "#A3E635", "grad_top": "#283D11", "grad_mid": "#172013"},
+    "flying":   {"label": "FLYING",   "accent": "#93C5FD", "grad_top": "#1B2C4E", "grad_mid": "#141B2C"},
+    "normal":   {"label": "NORMAL",   "accent": "#CBD5E1", "grad_top": "#262F3F", "grad_mid": "#151A24"},
+}
+
+STARTER_LINES: List[List[int]] = [
+    [4, 5, 6],       # Charmander -> Charmeleon -> Charizard
+    [1, 2, 3],       # Bulbasaur -> Ivysaur -> Venusaur
+    [7, 8, 9],       # Squirtle -> Wartortle -> Blastoise
+    [172, 25, 26],   # Pichu -> Pikachu -> Raichu
+    [92, 93, 94],    # Gastly -> Haunter -> Gengar
+    [447, 448],      # Riolu -> Lucario
+    [280, 281, 282], # Ralts -> Kirlia -> Gardevoir
+    [133, 197],      # Eevee -> Umbreon
 ]
 
-# In-memory cache to make visited Pokémon transitions instantaneous (0ms network wait)
+OFFLINE_FALLBACK_POKEMON: Dict[int, Dict[str, Any]] = {
+    4:   {"id": 4,   "name": "Charmander", "types": ["fire"],            "chain": [4, 5, 6]},
+    5:   {"id": 5,   "name": "Charmeleon", "types": ["fire"],            "chain": [4, 5, 6]},
+    6:   {"id": 6,   "name": "Charizard",  "types": ["fire", "flying"],  "chain": [4, 5, 6]},
+    1:   {"id": 1,   "name": "Bulbasaur",  "types": ["grass", "poison"], "chain": [1, 2, 3]},
+    2:   {"id": 2,   "name": "Ivysaur",    "types": ["grass", "poison"], "chain": [1, 2, 3]},
+    3:   {"id": 3,   "name": "Venusaur",   "types": ["grass", "poison"], "chain": [1, 2, 3]},
+    7:   {"id": 7,   "name": "Squirtle",   "types": ["water"],           "chain": [7, 8, 9]},
+    8:   {"id": 8,   "name": "Wartortle",  "types": ["water"],           "chain": [7, 8, 9]},
+    9:   {"id": 9,   "name": "Blastoise",  "types": ["water"],           "chain": [7, 8, 9]},
+    172: {"id": 172, "name": "Pichu",      "types": ["electric"],        "chain": [172, 25, 26]},
+    25:  {"id": 25,  "name": "Pikachu",    "types": ["electric"],        "chain": [172, 25, 26]},
+    26:  {"id": 26,  "name": "Raichu",     "types": ["electric"],        "chain": [172, 25, 26]},
+    92:  {"id": 92,  "name": "Gastly",     "types": ["ghost", "poison"], "chain": [92, 93, 94]},
+    93:  {"id": 93,  "name": "Haunter",    "types": ["ghost", "poison"], "chain": [92, 93, 94]},
+    94:  {"id": 94,  "name": "Gengar",     "types": ["ghost", "poison"], "chain": [92, 93, 94]},
+}
+
 POKEMON_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
-# ---------------------------------------------------------------------------
-# Async PokéAPI Service Layer
-# ---------------------------------------------------------------------------
-async def fetch_pokemon_data(client: httpx.AsyncClient, query: str | int) -> Dict[str, Any]:
-    """Fetch and normalize Pokémon data from PokéAPI with in-memory caching."""
+def get_sprite_url(poke_id: int) -> str:
+    if 1 <= poke_id <= MAX_ANIMATED_ID:
+        return (
+            "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+            f"sprites/pokemon/versions/generation-v/black-white/animated/{poke_id}.gif"
+        )
+    return (
+        "https://raw.githubusercontent.com/PokeAPI/sprites/master/"
+        f"sprites/pokemon/other/official-artwork/{poke_id}.png"
+    )
+
+
+def build_offline_bundle(poke_id: int) -> Dict[str, Any]:
+    base = OFFLINE_FALLBACK_POKEMON.get(
+        poke_id,
+        {"id": poke_id, "name": f"Pokémon #{poke_id}", "types": ["normal"], "chain": [poke_id]},
+    )
+    pid = base["id"]
+    return {
+        "id": pid,
+        "code": f"#{pid:04d}",
+        "name": base["name"],
+        "types": base["types"],
+        "primary_type": base["types"][0],
+        "sprite_url": get_sprite_url(pid),
+        "chain": base["chain"],
+    }
+
+
+def _extract_id(url: str) -> int:
+    return int(url.rstrip("/").split("/")[-1])
+
+
+def _parse_chain_ids(node: Dict[str, Any], acc: Optional[List[int]] = None) -> List[int]:
+    if acc is None:
+        acc = []
+    if not node or "species" not in node:
+        return acc
+    acc.append(_extract_id(node["species"]["url"]))
+    for child in node.get("evolves_to", []):
+        _parse_chain_ids(child, acc)
+    return acc
+
+
+async def fetch_pokemon_with_evolution(client: httpx.AsyncClient, query: str | int) -> Dict[str, Any]:
     clean_key = str(query).strip().lower().lstrip("#")
     if clean_key.isdigit():
         clean_key = str(int(clean_key))
@@ -68,716 +153,929 @@ async def fetch_pokemon_data(client: httpx.AsyncClient, query: str | int) -> Dic
     if clean_key in POKEMON_CACHE:
         return POKEMON_CACHE[clean_key]
 
-    resp = await client.get(f"{POKEAPI_BASE}/pokemon/{clean_key}", timeout=8.0)
-    if resp.status_code != 200:
-        raise ValueError(f"Pokémon '{query}' not found.")
+    try:
+        resp = await client.get(f"{POKEAPI_BASE}/pokemon/{clean_key}", timeout=6.0)
+        if resp.status_code != 200:
+            raise ValueError(f"Pokémon '{query}' não encontrado.")
 
-    raw = resp.json()
-    poke_id: int = raw["id"]
-    name: str = raw["name"].replace("-", " ").title()
-    types: List[str] = [t["type"]["name"] for t in raw.get("types", [])]
-    primary_type: str = types[0] if types else "normal"
+        raw = resp.json()
+        poke_id: int = int(raw["id"])
+        name: str = raw["name"].replace("-", " ").title()
+        types: List[str] = [t["type"]["name"] for t in raw.get("types", [])] or ["normal"]
 
-    artwork_url: str = (
-        raw.get("sprites", {})
-        .get("other", {})
-        .get("official-artwork", {})
-        .get("front_default")
-        or f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/{poke_id}.png"
-    )
+        animated_url = (
+            raw.get("sprites", {})
+            .get("versions", {})
+            .get("generation-v", {})
+            .get("black-white", {})
+            .get("animated", {})
+            .get("front_default")
+        )
+        official_url = (
+            raw.get("sprites", {})
+            .get("other", {})
+            .get("official-artwork", {})
+            .get("front_default")
+        )
+        sprite_url = animated_url or get_sprite_url(poke_id) or official_url
 
-    stats_map: Dict[str, int] = {
-        s["stat"]["name"]: int(s["base_stat"]) for s in raw.get("stats", [])
-    }
-    total_stats: int = sum(stats_map.values())
+        chain_ids: List[int] = [poke_id]
+        try:
+            sp_url = raw.get("species", {}).get("url") or f"{POKEAPI_BASE}/pokemon-species/{poke_id}"
+            sp_resp = await client.get(sp_url, timeout=5.0)
+            if sp_resp.status_code == 200:
+                evo_url = sp_resp.json().get("evolution_chain", {}).get("url")
+                if evo_url:
+                    evo_resp = await client.get(evo_url, timeout=5.0)
+                    if evo_resp.status_code == 200:
+                        parsed = _parse_chain_ids(evo_resp.json().get("chain", {}))
+                        if parsed:
+                            chain_ids = parsed
+        except Exception:
+            if poke_id in OFFLINE_FALLBACK_POKEMON:
+                chain_ids = OFFLINE_FALLBACK_POKEMON[poke_id]["chain"]
 
-    abilities: List[str] = [
-        a["ability"]["name"].replace("-", " ").title()
-        for a in raw.get("abilities", [])[:3]
-    ]
+        bundle = {
+            "id": poke_id,
+            "code": f"#{poke_id:04d}",
+            "name": name,
+            "types": types,
+            "primary_type": types[0],
+            "sprite_url": sprite_url,
+            "chain": chain_ids,
+        }
+        POKEMON_CACHE[str(poke_id)] = bundle
+        POKEMON_CACHE[raw["name"].lower()] = bundle
+        return bundle
 
-    height_m: float = round(raw.get("height", 0) / 10.0, 1)
-    weight_kg: float = round(raw.get("weight", 0) / 10.0, 1)
-    base_exp: int = raw.get("base_experience") or 0
-
-    data = {
-        "id": poke_id,
-        "code": f"#{poke_id:04d}",
-        "name": name,
-        "types": types,
-        "primary_type": primary_type,
-        "artwork_url": artwork_url,
-        "stats": stats_map,
-        "total_stats": total_stats,
-        "abilities": ", ".join(abilities) if abilities else "Unknown",
-        "height": f"{height_m} m",
-        "weight": f"{weight_kg} kg",
-        "base_exp": str(base_exp),
-    }
-
-    POKEMON_CACHE[str(poke_id)] = data
-    POKEMON_CACHE[raw["name"].lower()] = data
-    return data
+    except ValueError:
+        raise
+    except Exception:
+        if clean_key.isdigit():
+            fallback = build_offline_bundle(int(clean_key))
+            POKEMON_CACHE[clean_key] = fallback
+            return fallback
+        for fb in OFFLINE_FALLBACK_POKEMON.values():
+            if fb["name"].lower() == clean_key:
+                fallback = build_offline_bundle(fb["id"])
+                POKEMON_CACHE[clean_key] = fallback
+                return fallback
+        raise ValueError(f"Não foi possível carregar '{query}'.")
 
 
 # ---------------------------------------------------------------------------
-# Main Reactive Flet Application (Single-Init DOM, Zero Flickering)
+# Main Poké-moro Application (Sleek Rotom-OS / Pokémon Sleep Design)
 # ---------------------------------------------------------------------------
 async def main(page: ft.Page) -> None:
-    page.title = "Poke-moro — Rotom Pokédex & Focus Hub"
-    page.padding = 0
+    page.title = "Poké-moro"
+    page.padding = 16
     page.spacing = 0
-    page.bgcolor = "#070A10"
+    page.bgcolor = "#080B12"
     page.theme_mode = ft.ThemeMode.DARK
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
     http_client = httpx.AsyncClient()
+
+    init_bundle = build_offline_bundle(4)
+    POKEMON_CACHE["4"] = init_bundle
+    POKEMON_CACHE["charmander"] = init_bundle
+
     state: Dict[str, Any] = {
-        "current_id": 25,
+        "line_index": 0,
+        "pokemon": init_bundle,
+        "mode": "focus",
+        "running": False,
+        "total_seconds": POMODORO_MODES["focus"]["seconds"],
+        "remaining_seconds": POMODORO_MODES["focus"]["seconds"],
+        "cycles_completed": 0,
+        "total_focus_completed": 0,
+        "breath_up": False,
         "request_seq": 0,
-        "timer_running": False,
-        "timer_seconds": 25 * 60,
-        "trainer_xp": 0,
     }
 
     # -----------------------------------------------------------------------
-    # 1. Instantiate Visual Controls ONCE (Never destroyed or recreated)
+    # 1. Instantiate All Visual Controls ONCE (Zero Flickering Architecture)
     # -----------------------------------------------------------------------
-    search_input = ft.TextField(
-        hint_text="Search Pokémon name or #ID (e.g. Charizard, 6, Gengar)...",
-        hint_style=ft.TextStyle(color="#64748B", size=13),
-        text_style=ft.TextStyle(color="#F8FAFC", size=13, weight=ft.FontWeight.W_500),
-        bgcolor="#99090D16",
-        border_color="#26FFFFFF",
-        focused_border_color="#FF5722",
-        border_radius=14,
-        height=42,
-        content_padding=ft.padding.symmetric(horizontal=14, vertical=8),
-        expand=True,
+
+    # Top Hero Micro-Header: Pokédex Code + Type Pill + Micro Action Icons (⚡ & 🔍)
+    txt_code = ft.Text(
+        value="#0004",
+        size=13,
+        weight=ft.FontWeight.W_800,
+        color="#94A3B8",
     )
 
-    loading_ring = ft.ProgressRing(
-        width=18,
-        height=18,
-        stroke_width=2.2,
-        color="#FACC15",
-        visible=False,
-    )
-
-    error_banner = ft.Container(
-        visible=False,
-        bgcolor="#33EF4444",
-        border=ft.border.all(1, "#66EF4444"),
-        border_radius=10,
-        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+    type_pill = ft.Container(
+        bgcolor="#26FF6B35",
+        border=ft.border.all(1, "#66FF6B35"),
+        border_radius=999,
+        padding=ft.padding.symmetric(horizontal=10, vertical=3),
         content=ft.Text(
-            value="",
-            color="#FCA5A5",
-            size=12,
-            weight=ft.FontWeight.W_600,
+            value="FIRE",
+            size=10,
+            weight=ft.FontWeight.W_800,
+            color="#FF6B35",
         ),
     )
 
-    # Pomodoro Timer Controls (Updated granularly via txt_timer.update())
-    txt_timer = ft.Text(
-        value="25:00",
-        size=16,
-        weight=ft.FontWeight.W_900,
-        color="#FFFFFF",
-    )
-    txt_trainer_xp = ft.Text(
-        value="0 EXP",
-        size=11,
-        weight=ft.FontWeight.W_800,
-        color="#FACC15",
-    )
-
-    txt_watermark = ft.Text(
-        value="#0025",
-        size=84,
-        weight=ft.FontWeight.W_900,
-        color="#12FFFFFF",
-        text_align=ft.TextAlign.CENTER,
-    )
-
+    # High-Presence Pokémon Sprite (140x140) with Crisp Pixel Filtering & Floor Shadow
+    filter_none = getattr(ft.FilterQuality, "NONE", None)
     img_pokemon = ft.Image(
-        src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png",
-        width=190,
-        height=190,
+        src=init_bundle["sprite_url"],
+        width=136,
+        height=136,
         fit=ft.ImageFit.CONTAIN,
         gapless_playback=True,
+        filter_quality=filter_none,
     )
 
-    img_wrapper = ft.Container(
-        content=img_pokemon,
-        opacity=1.0,
-        animate_opacity=ft.Animation(220, ft.AnimationCurve.EASE_OUT),
+    sprite_holder = ft.Container(
+        width=148,
+        height=148,
         alignment=ft.alignment.center,
+        scale=1.0,
+        animate_scale=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),
+        content=img_pokemon,
     )
 
-    hero_glow_orb = ft.Container(
-        width=160,
-        height=160,
-        border_radius=100,
-        bgcolor="#33FACC15",
-        animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
+    floor_shadow = ft.Container(
+        width=92,
+        height=12,
+        border_radius=50,
+        bgcolor="#55000000",
     )
 
-    txt_code_pill = ft.Text(
-        value="#0025 • ROTOM DEX",
-        size=12,
+    txt_poke_name = ft.Text(
+        value="Charmander",
+        size=24,
         weight=ft.FontWeight.W_800,
-        color="#FACC15",
+        color="#F8FAFC",
+        text_align=ft.TextAlign.CENTER,
     )
 
-    txt_name = ft.Text(
-        value="Pikachu",
-        size=28,
-        weight=ft.FontWeight.W_900,
+    txt_stage_subtitle = ft.Text(
+        value="Estágio 1/3 • Evolui ao concluir o foco",
+        size=11,
+        weight=ft.FontWeight.W_500,
+        color="#94A3B8",
+        text_align=ft.TextAlign.CENTER,
+    )
+
+    evo_thin_bar = ft.ProgressBar(
+        width=140,
+        value=0.33,
+        color="#FF6B35",
+        bgcolor="#1F2937",
+        bar_height=3,
+        border_radius=2,
+    )
+
+    # Segmented Control Mode Pills (Foco 25m | Pausa 5m | Longa 15m)
+    mode_pills: Dict[str, ft.Container] = {}
+
+    # Protagonist Timer Display (68px frameless typography + 4px ultra-thin linear bar)
+    txt_timer = ft.Text(
+        value="25:00",
+        size=68,
+        weight=ft.FontWeight.W_800,
         color="#FFFFFF",
         text_align=ft.TextAlign.CENTER,
     )
 
-    badges_row = ft.Row(
-        alignment=ft.MainAxisAlignment.CENTER,
-        spacing=8,
-        controls=[],
+    timer_thin_bar = ft.ProgressBar(
+        value=1.0,
+        color="#FF6B35",
+        bgcolor="#1A2232",
+        bar_height=4,
+        border_radius=2,
     )
 
-    txt_height_val = ft.Text("0.4 m", size=14, weight=ft.FontWeight.W_800, color="#F8FAFC")
-    txt_weight_val = ft.Text("6.0 kg", size=14, weight=ft.FontWeight.W_800, color="#F8FAFC")
-    txt_exp_val = ft.Text("112", size=14, weight=ft.FontWeight.W_800, color="#F8FAFC")
-    txt_abilities_val = ft.Text(
-        "Static, Lightning Rod",
-        size=12,
-        weight=ft.FontWeight.W_700,
-        color="#E2E8F0",
-        max_lines=1,
-        overflow=ft.TextOverflow.ELLIPSIS,
-    )
-
-    stat_value_texts: Dict[str, ft.Text] = {}
-    stat_progress_bars: Dict[str, ft.ProgressBar] = {}
-    stat_rows: List[ft.Control] = []
-
-    for sc in STAT_CONFIG:
-        s_key = sc["key"]
-        val_txt = ft.Text(
-            value="50",
-            size=12,
+    # Primary Action Button (height=52, border_radius=18) + Subtle Circular Reset & Skip
+    btn_primary_action = ft.Container(
+        expand=True,
+        height=52,
+        bgcolor="#FF6B35",
+        border_radius=18,
+        alignment=ft.alignment.center,
+        ink=True,
+        shadow=ft.BoxShadow(
+            blur_radius=20,
+            color="#44FF6B35",
+            offset=ft.Offset(0, 6),
+        ),
+        content=ft.Text(
+            value="▶  Iniciar Foco",
+            size=15,
             weight=ft.FontWeight.W_800,
-            color="#FFFFFF",
-            width=32,
-            text_align=ft.TextAlign.RIGHT,
-        )
-        p_bar = ft.ProgressBar(
-            value=0.35,
-            color=sc["color"],
-            bgcolor="#1E293B",
-            bar_height=7,
-            border_radius=6,
-            expand=True,
-        )
-        stat_value_texts[s_key] = val_txt
-        stat_progress_bars[s_key] = p_bar
-        stat_rows.append(
-            ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=10,
-                controls=[
-                    ft.Text(
-                        sc["label"],
-                        size=12,
-                        weight=ft.FontWeight.W_700,
-                        color="#94A3B8",
-                        width=58,
-                    ),
-                    val_txt,
-                    p_bar,
-                ],
+            color="#080B12",
+        ),
+    )
+
+    # 4 Mini-Pokéball Cycle Indicators
+    mini_pokeballs: List[ft.Container] = []
+    for _ in range(CYCLES_PER_STREAK):
+        mini_pokeballs.append(
+            ft.Container(
+                width=20,
+                height=20,
+                border_radius=10,
+                bgcolor="#161D2B",
+                border=ft.border.all(1.8, "#2E3A4F"),
+                alignment=ft.alignment.center,
+                animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
+                content=ft.Container(
+                    width=6,
+                    height=6,
+                    border_radius=3,
+                    bgcolor="#2E3A4F",
+                ),
             )
         )
 
-    txt_total_stats = ft.Text(
-        value="BASE STAT TOTAL: 320",
+    txt_sessions_count = ft.Text(
+        value="0 / 4 Ciclos",
         size=12,
-        weight=ft.FontWeight.W_900,
-        color="#FACC15",
+        weight=ft.FontWeight.W_600,
+        color="#64748B",
+    )
+
+    # Search Modal Dialog Controls (Opened via 🔍 button in the header)
+    modal_search_input = ft.TextField(
+        hint_text="Nome ou #ID (ex: Pikachu, 25, Gengar, 448)...",
+        hint_style=ft.TextStyle(color="#64748B", size=12),
+        text_style=ft.TextStyle(color="#F8FAFC", size=13, weight=ft.FontWeight.W_600),
+        bgcolor="#0B0F19",
+        border_color="#263042",
+        focused_border_color="#FF6B35",
+        border_radius=12,
+        height=42,
+        content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+        autofocus=True,
+    )
+
+    txt_modal_error = ft.Text(
+        value="",
+        size=11,
+        weight=ft.FontWeight.W_600,
+        color="#FCA5A5",
+        visible=False,
     )
 
     # -----------------------------------------------------------------------
-    # 2. Granular Update Routine (Mutates properties in-place, zero flicker)
+    # 2. Granular Theme & UI Synchronization (Zero Flickering)
     # -----------------------------------------------------------------------
-    async def preload_neighbors(center_id: int) -> None:
-        prev_id = center_id - 1 if center_id > 1 else MAX_POKEMON_ID
-        next_id = center_id + 1 if center_id < MAX_POKEMON_ID else 1
-        for neighbor in (prev_id, next_id):
-            if str(neighbor) not in POKEMON_CACHE:
-                try:
-                    await fetch_pokemon_data(http_client, neighbor)
-                except Exception:
-                    pass
+    def get_active_accent() -> str:
+        poke = state["pokemon"]
+        p_type = poke["primary_type"]
+        t_info = TYPE_THEMES.get(p_type, TYPE_THEMES["normal"])
+        override = POMODORO_MODES[state["mode"]]["override_hex"]
+        return override if override else t_info["accent"]
 
-    async def load_pokemon(query_or_id: str | int) -> None:
+    def sync_card_ui(custom_subtitle: Optional[str] = None) -> None:
+        poke = state["pokemon"]
+        p_type = poke["primary_type"]
+        t_info = TYPE_THEMES.get(p_type, TYPE_THEMES["normal"])
+        type_accent = t_info["accent"]
+        active_accent = get_active_accent()
+
+        # 1. Dynamic Hero Stage Atmospheric Gradient
+        if state["mode"] == "focus":
+            grad_top = t_info["grad_top"]
+            grad_mid = t_info["grad_mid"]
+        elif state["mode"] == "short_break":
+            grad_top = "#0D3B2E"
+            grad_mid = "#102323"
+        else:
+            grad_top = "#0E2F4F"
+            grad_mid = "#101E30"
+
+        hero_stage.gradient = ft.LinearGradient(
+            begin=ft.alignment.top_center,
+            end=ft.alignment.bottom_center,
+            colors=[grad_top, grad_mid, "#101520"],
+        )
+
+        # Card ambient glow shadow
+        sleek_card.shadow = ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=50,
+            color=f"#26{active_accent.lstrip('#')}",
+            offset=ft.Offset(0, 18),
+        )
+
+        # 2. Header Code & Type Pill
+        txt_code.value = poke["code"]
+        type_pill.bgcolor = f"#22{type_accent.lstrip('#')}"
+        type_pill.border = ft.border.all(1, f"#55{type_accent.lstrip('#')}")
+        type_pill.content.value = t_info["label"]
+        type_pill.content.color = type_accent
+
+        # 3. Sprite & Evolution Progress
+        if img_pokemon.src != poke["sprite_url"]:
+            img_pokemon.src = poke["sprite_url"]
+
+        txt_poke_name.value = poke["name"]
+
+        chain: List[int] = poke.get("chain") or [poke["id"]]
+        total_stages = len(chain)
+        curr_idx = chain.index(poke["id"]) if poke["id"] in chain else 0
+        stage_num = curr_idx + 1
+
+        evo_thin_bar.value = round(stage_num / max(1, total_stages), 2)
+        evo_thin_bar.color = type_accent
+
+        if custom_subtitle:
+            txt_stage_subtitle.value = custom_subtitle
+        elif state["mode"] != "focus":
+            txt_stage_subtitle.value = f"Descansando no Centro Pokémon • Estágio {stage_num}/{total_stages}"
+        elif curr_idx + 1 < total_stages:
+            txt_stage_subtitle.value = f"Estágio {stage_num}/{total_stages} • Evolui ao concluir o foco"
+        else:
+            txt_stage_subtitle.value = f"Estágio {stage_num}/{total_stages} • Forma Final Máxima"
+
+        # 4. Segmented Control Active Pill
+        for m_key, pill in mode_pills.items():
+            is_sel = m_key == state["mode"]
+            pill.bgcolor = "#1E2738" if is_sel else "#00000000"
+            pill.border = ft.border.all(1, "#33FFFFFF") if is_sel else None
+            pill.content.color = active_accent if is_sel else "#64748B"
+
+        # 5. Timer Bar & Primary Action Button
+        timer_thin_bar.color = active_accent
+        if state["running"]:
+            btn_primary_action.bgcolor = "#1E2738"
+            btn_primary_action.shadow = None
+            btn_primary_action.content.value = "⏸  Pausar"
+            btn_primary_action.content.color = "#F8FAFC"
+        else:
+            label_action = "▶  Iniciar Foco" if state["mode"] == "focus" else "▶  Iniciar Pausa"
+            btn_primary_action.bgcolor = active_accent
+            btn_primary_action.shadow = ft.BoxShadow(
+                blur_radius=20,
+                color=f"#44{active_accent.lstrip('#')}",
+                offset=ft.Offset(0, 6),
+            )
+            btn_primary_action.content.value = label_action
+            btn_primary_action.content.color = "#080B12"
+
+        # 6. 4 Mini-Pokéballs Indicator
+        filled = state["cycles_completed"]
+        for idx, ball in enumerate(mini_pokeballs):
+            if idx < filled:
+                ball.bgcolor = f"#28{active_accent.lstrip('#')}"
+                ball.border = ft.border.all(1.8, active_accent)
+                ball.content.bgcolor = active_accent
+            else:
+                ball.bgcolor = "#161D2B"
+                ball.border = ft.border.all(1.8, "#2A3447")
+                ball.content.bgcolor = "#2A3447"
+
+        txt_sessions_count.value = (
+            f"{filled} / {CYCLES_PER_STREAK} Ciclos"
+            if state["total_focus_completed"] == 0
+            else f"{filled} / {CYCLES_PER_STREAK} Ciclos • {state['total_focus_completed']} Total"
+        )
+
+    def sync_clock_only() -> None:
+        m, s = divmod(max(0, state["remaining_seconds"]), 60)
+        txt_timer.value = f"{m:02d}:{s:02d}"
+        total = max(1, state["total_seconds"])
+        timer_thin_bar.value = max(0.0, min(1.0, state["remaining_seconds"] / total))
+
+    # -----------------------------------------------------------------------
+    # 3. Async PokéAPI Partner Loader & Progressive Evolution
+    # -----------------------------------------------------------------------
+    async def load_pokemon(
+        query_or_id: str | int,
+        custom_subtitle: Optional[str] = None,
+        pulse: bool = False,
+    ) -> bool:
         req_id = state["request_seq"] + 1
         state["request_seq"] = req_id
 
-        clean_key = str(query_or_id).strip().lower().lstrip("#")
-        is_cached = clean_key in POKEMON_CACHE
-
-        if not is_cached:
-            loading_ring.visible = True
-            img_wrapper.opacity = 0.4
-            loading_ring.update()
-            img_wrapper.update()
-
         try:
-            data = await fetch_pokemon_data(http_client, query_or_id)
+            bundle = await fetch_pokemon_with_evolution(http_client, query_or_id)
         except Exception as exc:
             if req_id != state["request_seq"]:
-                return
-            loading_ring.visible = False
-            img_wrapper.opacity = 1.0
-            error_banner.content.value = str(exc)
-            error_banner.visible = True
-            loading_ring.update()
-            img_wrapper.update()
-            error_banner.update()
-            return
+                return False
+            txt_modal_error.value = str(exc)
+            txt_modal_error.visible = True
+            try:
+                txt_modal_error.update()
+            except Exception:
+                pass
+            return False
 
         if req_id != state["request_seq"]:
+            return False
+
+        state["pokemon"] = bundle
+        if custom_subtitle and custom_subtitle.startswith("__EVOLVED_FROM__:"):
+            prev_n = custom_subtitle.split(":", 1)[1]
+            custom_subtitle = f"✨ {prev_n} evoluiu para {bundle['name']}!"
+        elif custom_subtitle == "__RESET_STAGE__":
+            custom_subtitle = f"Estágio 1/{len(bundle.get('chain', [1]))} • Ciclo evolutivo reiniciado"
+
+        sync_card_ui(custom_subtitle=custom_subtitle)
+
+        if pulse:
+            sprite_holder.scale = 1.24
+            sleek_card.update()
+            await asyncio.sleep(0.32)
+            sprite_holder.scale = 1.0
+
+        sleek_card.update()
+        return True
+
+    async def trigger_evolution() -> None:
+        poke = state["pokemon"]
+        chain: List[int] = poke.get("chain") or [poke["id"]]
+        if len(chain) <= 1:
+            txt_stage_subtitle.value = f"{poke['name']} possui estágio único."
+            txt_stage_subtitle.update()
             return
 
-        state["current_id"] = data["id"]
-        theme = TYPE_PALETTE.get(data["primary_type"], TYPE_PALETTE["normal"])
-        primary_hex = theme["primary"]
+        curr_idx = chain.index(poke["id"]) if poke["id"] in chain else 0
+        next_idx = (curr_idx + 1) % len(chain)
+        next_id = chain[next_idx]
+        prev_name = poke["name"]
 
-        error_banner.visible = False
-        loading_ring.visible = False
-
-        bg_wrapper.gradient = ft.RadialGradient(
-            center=ft.Alignment(0, -0.35),
-            radius=1.15,
-            colors=[
-                f"#44{primary_hex.lstrip('#')}",
-                theme["bg_dark"],
-                "#06080E",
-            ],
+        await load_pokemon(
+            next_id,
+            custom_subtitle="__EVOLVED_FROM__:" + prev_name if next_idx > curr_idx else "__RESET_STAGE__",
+            pulse=True,
         )
-        glass_card.border = ft.border.all(1.5, f"#40{primary_hex.lstrip('#')}")
-        glass_card.shadow = ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=45,
-            color=f"#33{primary_hex.lstrip('#')}",
-            offset=ft.Offset(0, 14),
-        )
-        hero_glow_orb.bgcolor = f"#38{primary_hex.lstrip('#')}"
-        search_input.focused_border_color = primary_hex
-
-        txt_watermark.value = data["code"]
-        txt_code_pill.value = f"{data['code']} • ROTOM DEX"
-        txt_code_pill.color = primary_hex
-        txt_trainer_xp.color = primary_hex
-        txt_name.value = data["name"]
-        img_pokemon.src = data["artwork_url"]
-        img_wrapper.opacity = 1.0
-
-        new_badges: List[ft.Control] = []
-        for t_name in data["types"]:
-            t_info = TYPE_PALETTE.get(t_name, TYPE_PALETTE["normal"])
-            new_badges.append(
-                ft.Container(
-                    bgcolor=t_info["primary"],
-                    border_radius=20,
-                    padding=ft.padding.symmetric(horizontal=14, vertical=5),
-                    content=ft.Text(
-                        value=t_info["label"],
-                        size=11,
-                        weight=ft.FontWeight.W_900,
-                        color="#090D16",
-                    ),
-                )
-            )
-        badges_row.controls = new_badges
-
-        txt_height_val.value = data["height"]
-        txt_weight_val.value = data["weight"]
-        txt_exp_val.value = data["base_exp"]
-        txt_abilities_val.value = data["abilities"]
-
-        for sc in STAT_CONFIG:
-            s_key = sc["key"]
-            raw_val = data["stats"].get(s_key, 50)
-            stat_value_texts[s_key].value = str(raw_val)
-            stat_progress_bars[s_key].value = min(1.0, round(raw_val / 180.0, 3))
-
-        txt_total_stats.value = f"BASE STAT TOTAL: {data['total_stats']}"
-        txt_total_stats.color = primary_hex
-
-        bg_wrapper.update()
-        asyncio.create_task(preload_neighbors(data["id"]))
 
     # -----------------------------------------------------------------------
-    # 3. Granular Pomodoro Background Task (Updates ONLY txt_timer in-place)
+    # 4. Background Loops: 1s Pomodoro Timer & Idle Sprite Float Motion
     # -----------------------------------------------------------------------
-    btn_timer_toggle = ft.ElevatedButton(
-        text="Start Focus",
-        bgcolor="#26FFFFFF",
-        color="#FFFFFF",
-        height=32,
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
-    )
+    async def handle_session_finished() -> None:
+        state["running"] = False
+        if state["mode"] == "focus":
+            state["total_focus_completed"] += 1
+            state["cycles_completed"] += 1
 
-    async def timer_loop() -> None:
+            poke = state["pokemon"]
+            chain: List[int] = poke.get("chain") or [poke["id"]]
+            curr_idx = chain.index(poke["id"]) if poke["id"] in chain else 0
+            can_evolve = curr_idx + 1 < len(chain)
+
+            if state["cycles_completed"] >= CYCLES_PER_STREAK:
+                state["cycles_completed"] = 0
+                state["mode"] = "long_break"
+            else:
+                state["mode"] = "short_break"
+
+            state["total_seconds"] = POMODORO_MODES[state["mode"]]["seconds"]
+            state["remaining_seconds"] = state["total_seconds"]
+            sync_clock_only()
+
+            if can_evolve:
+                await trigger_evolution()
+                return
+        else:
+            state["mode"] = "focus"
+            state["total_seconds"] = POMODORO_MODES["focus"]["seconds"]
+            state["remaining_seconds"] = state["total_seconds"]
+            sync_clock_only()
+
+        sync_card_ui()
+        sleek_card.update()
+
+    async def timer_background_task() -> None:
         while True:
             await asyncio.sleep(1)
-            if state["timer_running"]:
-                state["timer_seconds"] = max(0, state["timer_seconds"] - 1)
-                m, s = divmod(state["timer_seconds"], 60)
-                txt_timer.value = f"{m:02d}:{s:02d}"
-                if state["timer_seconds"] == 0:
-                    state["timer_running"] = False
-                    state["timer_seconds"] = 25 * 60
-                    state["trainer_xp"] += 250
-                    txt_trainer_xp.value = f"{state['trainer_xp']} EXP"
-                    btn_timer_toggle.text = "Start Focus"
-                    txt_trainer_xp.update()
-                    btn_timer_toggle.update()
+            state["breath_up"] = not state["breath_up"]
+            sprite_holder.scale = 1.05 if state["breath_up"] else 0.98
+            try:
+                sprite_holder.update()
+            except Exception:
+                pass
+
+            if not state["running"]:
+                continue
+
+            state["remaining_seconds"] = max(0, state["remaining_seconds"] - 1)
+            sync_clock_only()
+
+            if state["remaining_seconds"] <= 0:
+                await handle_session_finished()
+            else:
                 txt_timer.update()
+                timer_thin_bar.update()
 
-    async def on_timer_toggle(_: ft.ControlEvent) -> None:
-        state["timer_running"] = not state["timer_running"]
-        btn_timer_toggle.text = "Pause" if state["timer_running"] else "Start Focus"
-        btn_timer_toggle.update()
+    # -----------------------------------------------------------------------
+    # 5. User Interaction Callbacks & Clean Search Modal
+    # -----------------------------------------------------------------------
+    async def on_switch_mode(new_mode: str) -> None:
+        state["running"] = False
+        state["mode"] = new_mode
+        state["total_seconds"] = POMODORO_MODES[new_mode]["seconds"]
+        state["remaining_seconds"] = state["total_seconds"]
+        sync_clock_only()
+        sync_card_ui()
+        sleek_card.update()
 
-    async def on_timer_reset(_: ft.ControlEvent) -> None:
-        state["timer_running"] = False
-        state["timer_seconds"] = 25 * 60
-        txt_timer.value = "25:00"
-        btn_timer_toggle.text = "Start Focus"
+    async def on_primary_action(_: ft.ControlEvent) -> None:
+        state["running"] = not state["running"]
+        sync_card_ui()
+        btn_primary_action.update()
+        txt_stage_subtitle.update()
+
+    async def on_reset(_: ft.ControlEvent) -> None:
+        state["running"] = False
+        state["remaining_seconds"] = state["total_seconds"]
+        sync_clock_only()
+        sync_card_ui()
         txt_timer.update()
-        btn_timer_toggle.update()
+        timer_thin_bar.update()
+        btn_primary_action.update()
+        txt_stage_subtitle.update()
 
-    btn_timer_toggle.on_click = on_timer_toggle
+    async def on_skip(_: ft.ControlEvent) -> None:
+        await handle_session_finished()
 
-    # -----------------------------------------------------------------------
-    # 4. Event Handlers (Buttons, Search, Keyboard Arrows)
-    # -----------------------------------------------------------------------
-    async def on_prev_click(_: ft.ControlEvent) -> None:
-        curr = state["current_id"]
-        target = curr - 1 if curr > 1 else MAX_POKEMON_ID
-        await load_pokemon(target)
+    async def on_prev_line(_: ft.ControlEvent) -> None:
+        state["line_index"] = (state["line_index"] - 1) % len(STARTER_LINES)
+        base_id = STARTER_LINES[state["line_index"]][0]
+        await load_pokemon(base_id)
 
-    async def on_next_click(_: ft.ControlEvent) -> None:
-        curr = state["current_id"]
-        target = curr + 1 if curr < MAX_POKEMON_ID else 1
-        await load_pokemon(target)
+    async def on_next_line(_: ft.ControlEvent) -> None:
+        state["line_index"] = (state["line_index"] + 1) % len(STARTER_LINES)
+        base_id = STARTER_LINES[state["line_index"]][0]
+        await load_pokemon(base_id)
 
-    async def on_random_click(_: ft.ControlEvent) -> None:
-        search_input.value = ""
-        search_input.update()
-        await load_pokemon(random.randint(1, MAX_POKEMON_ID))
+    async def on_bolt_evolve(_: ft.ControlEvent) -> None:
+        await trigger_evolution()
 
-    async def on_search_submit(_: ft.ControlEvent) -> None:
-        q = (search_input.value or "").strip()
-        if q:
-            await load_pokemon(q)
+    # Search Modal Dialog (ft.AlertDialog)
+    def close_search_modal(_: Optional[ft.ControlEvent] = None) -> None:
+        search_dialog.open = False
+        page.update()
 
-    async def on_keyboard(e: ft.KeyboardEvent) -> None:
-        if e.key == "Arrow Left":
-            await on_prev_click(e)
-        elif e.key == "Arrow Right":
-            await on_next_click(e)
+    async def submit_modal_search(_: Optional[ft.ControlEvent] = None) -> None:
+        q = (modal_search_input.value or "").strip()
+        if not q:
+            return
+        txt_modal_error.visible = False
+        ok = await load_pokemon(q)
+        if ok:
+            modal_search_input.value = ""
+            close_search_modal()
 
-    search_input.on_submit = on_search_submit
-    page.on_keyboard_event = on_keyboard
+    async def random_from_modal(_: ft.ControlEvent) -> None:
+        txt_modal_error.visible = False
+        ok = await load_pokemon(random.randint(1, MAX_ANIMATED_ID))
+        if ok:
+            modal_search_input.value = ""
+            close_search_modal()
 
-    # -----------------------------------------------------------------------
-    # 5. Layout Assembly (Centered Glassmorphism Card + Lateral Nav Arrows)
-    # -----------------------------------------------------------------------
-    def _metric_chip(label: str, value_control: ft.Control, expand: bool = True) -> ft.Container:
-        return ft.Container(
-            expand=expand,
-            bgcolor="#80090D16",
-            border=ft.border.all(1, "#1AFFFFFF"),
-            border_radius=12,
-            padding=ft.padding.symmetric(horizontal=10, vertical=8),
-            alignment=ft.alignment.center,
+    modal_search_input.on_submit = submit_modal_search
+
+    search_dialog = ft.AlertDialog(
+        modal=False,
+        bgcolor="#121826",
+        shape=ft.RoundedRectangleBorder(radius=22),
+        title=ft.Text("Escolher Companheiro", size=17, weight=ft.FontWeight.W_800, color="#F8FAFC"),
+        content=ft.Container(
+            width=310,
             content=ft.Column(
-                spacing=2,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=10,
+                tight=True,
                 controls=[
-                    ft.Text(label.upper(), size=10, weight=ft.FontWeight.W_700, color="#64748B"),
-                    value_control,
+                    modal_search_input,
+                    txt_modal_error,
+                    ft.Text(
+                        "Dica: Busque qualquer Pokémon de #1 a #1025 ou sorteie um aleatório.",
+                        size=11,
+                        color="#64748B",
+                    ),
                 ],
             ),
-        )
-
-    btn_prev = ft.IconButton(
-        icon=Icons.CHEVRON_LEFT if Icons else "chevron_left",
-        icon_color="#FFFFFF",
-        icon_size=26,
-        bgcolor="#990F172A",
-        tooltip="Previous Pokémon (←)",
-        on_click=on_prev_click,
-    )
-
-    btn_next = ft.IconButton(
-        icon=Icons.CHEVRON_RIGHT if Icons else "chevron_right",
-        icon_color="#FFFFFF",
-        icon_size=26,
-        bgcolor="#990F172A",
-        tooltip="Next Pokémon (→)",
-        on_click=on_next_click,
-    )
-
-    btn_search = ft.IconButton(
-        icon=Icons.SEARCH if Icons else "search",
-        icon_color="#F8FAFC",
-        icon_size=18,
-        bgcolor="#26FFFFFF",
-        tooltip="Search Pokédex",
-        on_click=on_search_submit,
-    )
-
-    btn_random = ft.ElevatedButton(
-        text="Random",
-        icon=Icons.SHUFFLE if Icons else "shuffle",
-        bgcolor="#26FFFFFF",
-        color="#FFFFFF",
-        height=42,
-        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12)),
-        on_click=on_random_click,
-    )
-
-    hero_section = ft.Container(
-        expand=5,
-        bgcolor="#66090D16",
-        border=ft.border.all(1, "#1AFFFFFF"),
-        border_radius=22,
-        padding=ft.padding.symmetric(horizontal=12, vertical=16),
-        content=ft.Column(
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=6,
-            controls=[
-                txt_code_pill,
-                ft.Stack(
-                    width=255,
-                    height=198,
-                    alignment=ft.alignment.center,
-                    controls=[
-                        txt_watermark,
-                        hero_glow_orb,
-                        img_wrapper,
-                    ],
-                ),
-                txt_name,
-                badges_row,
-            ],
         ),
+        actions=[
+            ft.TextButton(
+                "Aleatório",
+                icon=Icons.SHUFFLE,
+                style=ft.ButtonStyle(color="#FACC15"),
+                on_click=random_from_modal,
+            ),
+            ft.TextButton(
+                "Cancelar",
+                style=ft.ButtonStyle(color="#94A3B8"),
+                on_click=close_search_modal,
+            ),
+            ft.ElevatedButton(
+                "Selecionar",
+                bgcolor="#FF6B35",
+                color="#080B12",
+                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=10)),
+                on_click=submit_modal_search,
+            ),
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.overlay.append(search_dialog)
+
+    def open_search_modal(_: ft.ControlEvent) -> None:
+        txt_modal_error.visible = False
+        search_dialog.open = True
+        page.update()
+
+    btn_primary_action.on_click = on_primary_action
+
+    # -----------------------------------------------------------------------
+    # 6. Assemble Single Sleek Vertical Card (Width=380, BorderRadius=32)
+    # -----------------------------------------------------------------------
+
+    # Top Micro Action Buttons (⚡ Instant Evolution Test & 🔍 Search Modal)
+    btn_micro_evolve = ft.Container(
+        width=32,
+        height=32,
+        border_radius=16,
+        bgcolor="#1AFFFFFF",
+        alignment=ft.alignment.center,
+        ink=True,
+        tooltip="Testar Evolução (⚡)",
+        on_click=on_bolt_evolve,
+        content=ft.Icon(Icons.BOLT, color="#FACC15", size=17),
     )
 
-    info_section = ft.Container(
-        expand=7,
-        padding=ft.padding.symmetric(horizontal=4, vertical=2),
-        content=ft.Column(
-            spacing=10,
-            controls=[
-                # Integrated Pomodoro Focus Bar
-                ft.Container(
-                    bgcolor="#80090D16",
-                    border=ft.border.all(1, "#1AFFFFFF"),
-                    border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=12, vertical=6),
-                    content=ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        controls=[
-                            ft.Row(
-                                spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                controls=[
-                                    ft.Text("POKEFOCUS", size=10, weight=ft.FontWeight.W_900, color="#64748B"),
-                                    txt_timer,
-                                    txt_trainer_xp,
-                                ],
-                            ),
-                            ft.Row(
-                                spacing=6,
-                                controls=[
-                                    btn_timer_toggle,
-                                    ft.TextButton(
-                                        text="Reset",
-                                        style=ft.ButtonStyle(color="#94A3B8"),
-                                        on_click=on_timer_reset,
-                                    ),
-                                ],
-                            ),
-                        ],
-                    ),
-                ),
-                ft.Row(
-                    spacing=8,
-                    controls=[
-                        _metric_chip("Height", txt_height_val),
-                        _metric_chip("Weight", txt_weight_val),
-                        _metric_chip("Base EXP", txt_exp_val),
-                    ],
-                ),
-                ft.Container(
-                    bgcolor="#80090D16",
-                    border=ft.border.all(1, "#1AFFFFFF"),
-                    border_radius=12,
-                    padding=ft.padding.symmetric(horizontal=14, vertical=8),
-                    content=ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.Text("ABILITIES", size=10, weight=ft.FontWeight.W_800, color="#64748B"),
-                            txt_abilities_val,
-                        ],
-                    ),
-                ),
-                ft.Container(
-                    bgcolor="#80090D16",
-                    border=ft.border.all(1, "#1AFFFFFF"),
-                    border_radius=16,
-                    padding=ft.padding.all(14),
-                    content=ft.Column(
-                        spacing=7,
-                        controls=[
-                            ft.Row(
-                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                controls=[
-                                    ft.Text(
-                                        "BASE STATS",
-                                        size=11,
-                                        weight=ft.FontWeight.W_900,
-                                        color="#94A3B8",
-                                    ),
-                                    txt_total_stats,
-                                ],
-                            ),
-                            *stat_rows,
-                        ],
-                    ),
-                ),
-            ],
-        ),
+    btn_micro_search = ft.Container(
+        width=32,
+        height=32,
+        border_radius=16,
+        bgcolor="#1AFFFFFF",
+        alignment=ft.alignment.center,
+        ink=True,
+        tooltip="Buscar ou Sortear Pokémon (🔍)",
+        on_click=open_search_modal,
+        content=ft.Icon(Icons.SEARCH, color="#E2E8F0", size=16),
     )
 
-    quick_picks = [
-        (25, "Pikachu"),
-        (6, "Charizard"),
-        (94, "Gengar"),
-        (658, "Greninja"),
-        (448, "Lucario"),
-        (150, "Mewtwo"),
-        (384, "Rayquaza"),
-    ]
+    # Discreet Translucent `<` and `>` Arrows on Hero Stage Edges
+    btn_hero_prev = ft.Container(
+        width=34,
+        height=34,
+        border_radius=17,
+        bgcolor="#14FFFFFF",
+        alignment=ft.alignment.center,
+        ink=True,
+        tooltip="Companheiro Anterior",
+        on_click=on_prev_line,
+        content=ft.Icon(Icons.CHEVRON_LEFT, color="#CBD5E1", size=20),
+    )
 
-    async def make_quick_handler(pid: int):
-        search_input.value = ""
-        search_input.update()
-        await load_pokemon(pid)
+    btn_hero_next = ft.Container(
+        width=34,
+        height=34,
+        border_radius=17,
+        bgcolor="#14FFFFFF",
+        alignment=ft.alignment.center,
+        ink=True,
+        tooltip="Próximo Companheiro",
+        on_click=on_next_line,
+        content=ft.Icon(Icons.CHEVRON_RIGHT, color="#CBD5E1", size=20),
+    )
 
-    quick_chips_row = ft.Row(
-        spacing=6,
-        wrap=True,
-        alignment=ft.MainAxisAlignment.CENTER,
+    # Giant Translucent Minimalist Pokéball Watermark (opacity ~0.07 via #11FFFFFF)
+    pokeball_watermark = ft.Stack(
+        width=200,
+        height=200,
+        alignment=ft.alignment.center,
         controls=[
             ft.Container(
-                bgcolor="#1AFFFFFF",
-                border=ft.border.all(1, "#22FFFFFF"),
-                border_radius=10,
-                padding=ft.padding.symmetric(horizontal=10, vertical=4),
-                ink=True,
-                on_click=lambda _, pid=p_id: page.run_task(make_quick_handler, pid),
-                content=ft.Text(f"#{p_id:03d} {p_name}", size=11, weight=ft.FontWeight.W_700, color="#E2E8F0"),
-            )
-            for p_id, p_name in quick_picks
+                width=190,
+                height=190,
+                border_radius=95,
+                border=ft.border.all(14, "#10FFFFFF"),
+            ),
+            ft.Container(
+                width=190,
+                height=10,
+                bgcolor="#10FFFFFF",
+            ),
+            ft.Container(
+                width=52,
+                height=52,
+                border_radius=26,
+                bgcolor="#151821",
+                border=ft.border.all(11, "#12FFFFFF"),
+            ),
         ],
     )
 
-    glass_card = ft.Container(
-        width=840,
-        bgcolor="#BF0F172A",
-        blur=ft.Blur(24, 24, ft.BlurTileMode.MIRROR),
-        border=ft.border.all(1.5, "#40FACC15"),
-        border_radius=28,
-        padding=ft.padding.all(22),
-        animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
-        shadow=ft.BoxShadow(
-            spread_radius=1,
-            blur_radius=45,
-            color="#33FACC15",
-            offset=ft.Offset(0, 14),
+    # Top Hero Stage Container (Edge-to-Edge Atmospheric Type Gradient)
+    hero_stage = ft.Container(
+        padding=ft.padding.only(left=20, right=20, top=18, bottom=14),
+        animate=ft.Animation(450, ft.AnimationCurve.EASE_OUT),
+        gradient=ft.LinearGradient(
+            begin=ft.alignment.top_center,
+            end=ft.alignment.bottom_center,
+            colors=["#4D2212", "#241313", "#101520"],
         ),
         content=ft.Column(
-            spacing=12,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=6,
             tight=True,
             controls=[
+                # Single flat Header Row (Uses expanding spacer instead of nested Rows!)
                 ft.Row(
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
-                        search_input,
-                        loading_ring,
-                        btn_search,
-                        btn_random,
+                        txt_code,
+                        type_pill,
+                        ft.Container(expand=True),
+                        btn_micro_evolve,
+                        btn_micro_search,
                     ],
                 ),
-                quick_chips_row,
-                error_banner,
-                ft.ResponsiveRow(
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=16,
-                    controls=[
-                        ft.Container(col={"xs": 12, "md": 5}, content=hero_section),
-                        ft.Container(col={"xs": 12, "md": 7}, content=info_section),
-                    ],
-                ),
+                # Hero Centerpiece: `<` + Pokéball Watermark & Floating Pokémon + `>`
                 ft.Row(
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
-                        ft.Text("Tip: Use keyboard arrows (← / →) to navigate", size=11, color="#64748B"),
-                        ft.Text("PokéAPI v2 • Official Anime Artwork", size=11, color="#64748B"),
+                        btn_hero_prev,
+                        ft.Stack(
+                            width=210,
+                            height=185,
+                            alignment=ft.alignment.center,
+                            controls=[
+                                pokeball_watermark,
+                                ft.Column(
+                                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                    alignment=ft.MainAxisAlignment.CENTER,
+                                    spacing=0,
+                                    controls=[
+                                        sprite_holder,
+                                        floor_shadow,
+                                    ],
+                                ),
+                            ],
+                        ),
+                        btn_hero_next,
+                    ],
+                ),
+                # Pokémon Name + Integrated Evolution Stage Bar (Clickable to test evolution)
+                txt_poke_name,
+                ft.Container(
+                    on_click=on_bolt_evolve,
+                    ink=True,
+                    border_radius=8,
+                    padding=ft.padding.symmetric(horizontal=10, vertical=2),
+                    tooltip="Clique para testar a evolução",
+                    content=ft.Column(
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=5,
+                        tight=True,
+                        controls=[
+                            txt_stage_subtitle,
+                            evo_thin_bar,
+                        ],
+                    ),
+                ),
+            ],
+        ),
+    )
+
+    # Unified Segmented Control Bar for Timer Modes
+    for m_key, m_cfg in POMODORO_MODES.items():
+        is_sel = m_key == "focus"
+        pill = ft.Container(
+            expand=True,
+            height=34,
+            bgcolor="#1E2738" if is_sel else "#00000000",
+            border=ft.border.all(1, "#33FFFFFF") if is_sel else None,
+            border_radius=10,
+            alignment=ft.alignment.center,
+            ink=True,
+            on_click=lambda _, mk=m_key: page.run_task(on_switch_mode, mk),
+            content=ft.Text(
+                value=m_cfg["label"],
+                size=11,
+                weight=ft.FontWeight.W_700,
+                color="#FF6B35" if is_sel else "#64748B",
+            ),
+        )
+        mode_pills[m_key] = pill
+
+    segmented_control = ft.Container(
+        bgcolor="#0A0E17",
+        border=ft.border.all(1, "#18FFFFFF"),
+        border_radius=14,
+        padding=ft.padding.all(4),
+        content=ft.Row(
+            spacing=4,
+            controls=list(mode_pills.values()),
+        ),
+    )
+
+    # Subtle Circular Secondary Action Buttons (Reset & Skip)
+    btn_circle_reset = ft.Container(
+        width=50,
+        height=50,
+        border_radius=16,
+        bgcolor="#171E2E",
+        border=ft.border.all(1, "#242F46"),
+        alignment=ft.alignment.center,
+        ink=True,
+        tooltip="Resetar Cronômetro",
+        on_click=on_reset,
+        content=ft.Icon(Icons.REFRESH, color="#CBD5E1", size=20),
+    )
+
+    btn_circle_skip = ft.Container(
+        width=50,
+        height=50,
+        border_radius=16,
+        bgcolor="#171E2E",
+        border=ft.border.all(1, "#242F46"),
+        alignment=ft.alignment.center,
+        ink=True,
+        tooltip="Concluir / Pular Ciclo",
+        on_click=on_skip,
+        content=ft.Icon(Icons.SKIP_NEXT, color="#CBD5E1", size=22),
+    )
+
+    # Bottom Timer Surface (Frameless Clock, Ultra-thin bar, Tactile Controls & Mini-Pokéballs)
+    timer_surface = ft.Container(
+        padding=ft.padding.only(left=24, right=24, top=6, bottom=22),
+        content=ft.Column(
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=16,
+            tight=True,
+            controls=[
+                segmented_control,
+                # Protagonist Clock directly on card background
+                ft.Column(
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=6,
+                    tight=True,
+                    controls=[
+                        txt_timer,
+                        timer_thin_bar,
+                    ],
+                ),
+                # Action Controls Row
+                ft.Row(
+                    spacing=10,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        btn_circle_reset,
+                        btn_primary_action,
+                        btn_circle_skip,
+                    ],
+                ),
+                # Base Footer: 4 Mini-Pokéballs + Cycle Counter (Single flat Row!)
+                ft.Row(
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=8,
+                    controls=[
+                        *mini_pokeballs,
+                        ft.Container(expand=True),
+                        txt_sessions_count,
                     ],
                 ),
             ],
         ),
     )
 
-    bg_wrapper = ft.Container(
-        expand=True,
-        alignment=ft.alignment.center,
-        padding=ft.padding.all(16),
+    # Single Sleek Vertical Card (Width=380, BorderRadius=32, Rotom-OS Glassmorphism)
+    sleek_card = ft.Container(
+        width=380,
+        bgcolor="#101520",
+        border=ft.border.all(1, "#22FFFFFF"),
+        border_radius=32,
+        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         animate=ft.Animation(450, ft.AnimationCurve.EASE_OUT),
-        gradient=ft.RadialGradient(
-            center=ft.Alignment(0, -0.35),
-            radius=1.15,
-            colors=["#44FACC15", "#1D1907", "#06080E"],
+        shadow=ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=50,
+            color="#26FF6B35",
+            offset=ft.Offset(0, 18),
         ),
-        content=ft.Row(
-            alignment=ft.MainAxisAlignment.CENTER,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=12,
+        content=ft.Column(
+            spacing=0,
+            tight=True,
             controls=[
-                btn_prev,
-                glass_card,
-                btn_next,
+                hero_stage,
+                timer_surface,
             ],
         ),
     )
 
-    page.add(bg_wrapper)
-    asyncio.create_task(timer_loop())
-    await load_pokemon(25)
+    # Render immediately with offline defaults so the screen never stalls or flashes grey
+    sync_card_ui()
+    page.add(sleek_card)
+
+    # Start background tasks via Flet's modern page.run_task()
+    page.run_task(timer_background_task)
+    page.run_task(load_pokemon, 4)
 
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8501"))
-    ft.app(target=main, view=ft.AppView.WEB_BROWSER, port=port)
+    web_view = getattr(ft.AppView, "FLET_APP_WEB", ft.AppView.WEB_BROWSER)
+    ft.app(target=main, view=web_view, port=port)
