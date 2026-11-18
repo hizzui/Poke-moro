@@ -1,24 +1,48 @@
-# DIB
+# Dib — Gamified Pomodoro & Task Tracker
 
-![WhatsApp Image 2026-04-07 at 14 08 22](https://github.com/user-attachments/assets/e2a32aea-788d-4d9b-a0dd-996316c4891d)
+![Dib Preview](https://github.com/user-attachments/assets/e2a32aea-788d-4d9b-a0dd-996316c4891d)
 
-# Gamified Pomodoro Platform
+A Pomodoro focus timer and task tracker built entirely in **Python** with **Streamlit** and **SQLite**.
 
-A full-stack web application featuring a customized Pomodoro timer integrated with an animal-themed gamification progression system.
+Each completed focus session rewards XP (`10 XP` per focus minute) toward leveling up one of three pixel-art animal companions (**Pássaro**, **Coruja**, or **Raposa**), while persisting session history and to-do items locally in `data/dib.db`.
 
-## 🚀 Features
+---
 
-- **Customizable Pomodoro Timer:** 25-minute focus blocks and 5-minute break sessions tailored to user needs.
-- **Companion Selection:** Choose between 3 custom companion animals (Bird, Owl, Fox).
-- **XP & Leveling System:** Algorithmic level progression rewarding 10 XP per focus minute.
-- **Auto-Persistence:** Automated local data backup and state management powered by localStorage.
-- **Integrated To-Do List:** Built-in task tracking seamlessly connected to the focus ecosystem.
-- **Minimalist Responsive UI:** Immersive layout optimized for both desktop and mobile viewports.
+## Project Structure
 
-## 💻 Getting Started
+```text
+Dib/
+├── public/
+│   ├── coruja.gif       # Owl companion pixel sprite
+│   ├── passaro.gif      # Bird companion pixel sprite
+│   └── raposa.gif       # Fox companion pixel sprite
+├── app.py               # Streamlit Pomodoro UI, companion card, and task board
+├── core.py              # Companion definitions and XP / level progression math
+├── storage.py           # SQLite persistence layer (profile, sessions, tasks)
+└── requirements.txt
+```
 
-1. **Install dependencies:**
-```bash
-pip install -r requirements.txt
+---
 
+## Running Locally
 
+1. **Clone the repository and create a virtual environment:**
+   ```bash
+   git clone https://github.com/hizzui/Dib.git
+   cd Dib
+   python -m venv .venv
+   # Windows:
+   .venv\Scripts\activate
+   # Linux / macOS:
+   source .venv/bin/activate
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Start the app:**
+   ```bash
+   streamlit run app.py
+   ```

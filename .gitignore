@@ -1,26 +1,8 @@
-# Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environment
+.venv/
 venv/
-env/
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Vercel
-.vercel/
-.output/
-
-# OS
+data/*.db
+data/*.db-shm
+data/*.db-wal
 .DS_Store
-Thumbs.db
