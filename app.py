@@ -25,7 +25,6 @@ from storage import (
 
 st.set_page_config(
     page_title="Poke-moro — Pokémon Pomodoro & Task Tracker",
-    page_icon="🔴",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -246,7 +245,7 @@ def _render_settings_controls(profile: dict, active_key: str, prefix: str) -> No
         index=keys.index(active_key) if active_key in keys else 0,
         format_func=lambda k: (
             f"{COMPANIONS[k].name} [{COMPANIONS[k].element_type}] — "
-            f"{' → '.join(s.name for s in COMPANIONS[k].stages)}"
+            f"{' -> '.join(s.name for s in COMPANIONS[k].stages)}"
         ),
         key=f"{prefix}_partner_select",
     )
@@ -300,7 +299,7 @@ def main() -> None:
         f"""
         <div class="dib-header">
             <div>
-                <p class="dib-title">🔴 Poke-moro — PokéFocus Trainer</p>
+                <p class="dib-title">Poke-moro — PokéFocus Trainer</p>
                 <p class="dib-subtitle">Train your partner Pokémon through deep focus sessions (+{XP_PER_FOCUS_MINUTE} EXP / min)</p>
             </div>
             <span class="dib-badge">{current_stage.pokedex_code} {current_stage.name} • Lv. {level_info.level}</span>
@@ -310,14 +309,14 @@ def main() -> None:
     )
 
     # Mobile-friendly inline settings drawer
-    with st.expander("⚙️ Switch Partner Pokémon & Timer Settings", expanded=False):
+    with st.expander("Switch Partner Pokémon & Timer Settings", expanded=False):
         _render_settings_controls(profile, active_companion.key, prefix="inline")
 
     col_timer, col_side = st.columns([1.45, 1], gap="large")
 
     with col_timer:
         is_focus = st.session_state["mode"] == "focus"
-        mode_text = "⚔️ Battle Focus Session" if is_focus else "🏕️ Pokémon Center Rest"
+        mode_text = "Battle Focus Session" if is_focus else "Pokémon Center Rest"
         total_sec = (
             int(profile["focus_duration"]) * 60
             if is_focus
@@ -343,15 +342,15 @@ def main() -> None:
         row1_a, row1_b = st.columns(2)
         with row1_a:
             if not st.session_state["running"]:
-                if st.button("▶ Start Session", use_container_width=True, type="primary"):
+                if st.button("Start Session", use_container_width=True, type="primary"):
                     st.session_state["running"] = True
                     st.rerun()
             else:
-                if st.button("⏸ Pause Session", use_container_width=True):
+                if st.button("Pause Session", use_container_width=True):
                     st.session_state["running"] = False
                     st.rerun()
         with row1_b:
-            if st.button("✓ Complete & Claim EXP", use_container_width=True):
+            if st.button("Complete & Claim EXP", use_container_width=True):
                 st.session_state["running"] = False
                 if is_focus:
                     record_focus_session(int(profile["focus_duration"]))
@@ -364,7 +363,7 @@ def main() -> None:
 
         row2_a, row2_b = st.columns(2)
         with row2_a:
-            if st.button("↺ Reset Timer", use_container_width=True):
+            if st.button("Reset Timer", use_container_width=True):
                 st.session_state["running"] = False
                 st.session_state["remaining_sec"] = total_sec
                 st.rerun()
@@ -381,7 +380,7 @@ def main() -> None:
                 )
                 st.rerun()
 
-        # Responsive 3-column HTML stats grid (never stacks awkwardly on mobile)
+        # Responsive 3-column HTML stats grid
         st.markdown(
             f"""
             <div class="stats-grid">
@@ -404,14 +403,14 @@ def main() -> None:
 
     with col_side:
         data_uri = _gif_data_uri(current_stage.sprite_path)
-        sprite_html = f"<img src='{data_uri}' alt='{current_stage.name}' />" if data_uri else "🔴"
+        sprite_html = f"<img src='{data_uri}' alt='{current_stage.name}' />" if data_uri else ""
         evo_parts = []
         for stg in active_companion.stages:
             if stg.pokedex_id == current_stage.pokedex_id:
                 evo_parts.append(f"<strong style='color:#F8FAFC;'>{stg.name} (Lv.{stg.min_level})</strong>")
             else:
                 evo_parts.append(f"{stg.name} (Lv.{stg.min_level})")
-        evo_html = " → ".join(evo_parts)
+        evo_html = " -> ".join(evo_parts)
         next_evo_note = (
             f"Evolves into <strong>{next_stage.name}</strong> at <strong>Lv. {next_stage.min_level}</strong>"
             if next_stage
@@ -445,7 +444,7 @@ def main() -> None:
 
         st.divider()
 
-        st.subheader("📋 Trainer Quests (To-Do)")
+        st.subheader("Trainer Quests (To-Do)")
         with st.form("new_task_form", clear_on_submit=True):
             new_title = st.text_input("New quest", placeholder="e.g. Finish database migration...")
             submitted = st.form_submit_button("Add Quest", use_container_width=True)
