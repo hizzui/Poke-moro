@@ -1,4 +1,4 @@
-# 🔴 Dib — Pokémon Pomodoro & Task Tracker
+# 🔴 Poke-moro — Pokémon Pomodoro & Task Tracker
 
 Gamified Pomodoro timer and task tracker built with **Python**, **Streamlit**, and **SQLite**, featuring animated Gen-V pixel-art Pokémon partners that level up and evolve as you complete focus sessions. Fully responsive across desktop and mobile viewports.
 
@@ -17,8 +17,8 @@ Gamified Pomodoro timer and task tracker built with **Python**, **Streamlit**, a
 ## 🚀 Running Locally
 
 ```bash
-git clone https://github.com/hizzui/Dib.git
-cd Dib
+git clone https://github.com/hizzui/Poke-moro.git
+cd Poke-moro
 pip install -r requirements.txt
 streamlit run app.py
 ```
