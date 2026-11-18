@@ -1,5 +1,5 @@
 """
-Dib — Gamified Pomodoro & Task Tracker in Python (Streamlit + SQLite).
+Pomodoro timer and task tracker built with Streamlit and SQLite.
 """
 
 from __future__ import annotations
@@ -51,7 +51,6 @@ def main() -> None:
     active_companion = COMPANIONS.get(profile["companion"], COMPANIONS["coruja"])
     level_info = compute_level(profile["total_xp"])
 
-    # ---------------- Sidebar: Companion & Timer Settings ----------------
     with st.sidebar:
         st.header("Companheiro")
         selected_key = st.radio(
@@ -85,11 +84,10 @@ def main() -> None:
             st.session_state["remaining_sec"] = int(target_min) * 60
             st.rerun()
 
-    # ---------------- Main Layout ----------------
     col_timer, col_side = st.columns([1.6, 1], gap="large")
 
     with col_timer:
-        st.title("Dib — Pomodoro Focus")
+        st.title("Dib")
         mode_label = "⏱️ Sessão de Foco" if st.session_state["mode"] == "focus" else "☕ Pausa Curta"
         st.subheader(mode_label)
 
