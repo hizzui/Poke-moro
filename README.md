@@ -1,5 +1,7 @@
 # 🔴 Poke-moro — Pokémon Pomodoro & Task Tracker
 
+<img width="736" height="414" alt="Poke-moro Banner" src="public/pokemoro_banner.jpg" />
+
 Gamified Pomodoro timer and task tracker built with **Python**, **Streamlit**, and **SQLite**, featuring animated Gen-V pixel-art Pokémon partners that level up and evolve as you complete focus sessions. Fully responsive across desktop and mobile viewports.
 
 ## ✨ Features
