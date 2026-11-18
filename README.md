@@ -1,12 +1,20 @@
-# Dib
+# 🔴 Dib — Pokémon Pomodoro & Task Tracker
 
-![Dib Preview](https://github.com/user-attachments/assets/e2a32aea-788d-4d9b-a0dd-996316c4891d)
+Gamified Pomodoro timer and task tracker built with **Python**, **Streamlit**, and **SQLite**, featuring animated Gen-V pixel-art Pokémon partners that level up and evolve as you complete focus sessions. Fully responsive across desktop and mobile viewports.
 
-Pomodoro timer and task list built with Python, Streamlit, and SQLite.
+## ✨ Features
 
-You pick one of three pixel-art companions (bird, owl, or fox) and earn 10 XP per focus minute completed. Session history, XP progress, and to-do items are saved locally in `data/dib.db`.
+- **5 Partner Evolution Lines (15 Animated Sprites):**
+  - 🔥 **Charmander** (Lv. 1) → **Charmeleon** (Lv. 5) → **Charizard** (Lv. 10)
+  - 🌿 **Bulbasaur** (Lv. 1) → **Ivysaur** (Lv. 5) → **Venusaur** (Lv. 10)
+  - 💧 **Squirtle** (Lv. 1) → **Wartortle** (Lv. 5) → **Blastoise** (Lv. 10)
+  - ⚡ **Pichu** (Lv. 1) → **Pikachu** (Lv. 5) → **Raichu** (Lv. 10)
+  - 👻 **Gastly** (Lv. 1) → **Haunter** (Lv. 5) → **Gengar** (Lv. 10)
+- **EXP & Evolution System:** Earn **10 EXP per focus minute** completed (`100 EXP` per level) and watch your partner evolve automatically in the Pokédex card.
+- **Mobile-Responsive UI:** Fluid `clamp()` timer typography, 2×2 touch-friendly control grid, 3-column compact stats bar, and an inline settings drawer so mobile users can switch Pokémon or adjust timer durations without opening a hidden sidebar.
+- **Local SQLite Persistence:** All trainer stats, active evolution line, and quest tasks are stored locally in `data/dib.db`.
 
-## Running locally
+## 🚀 Running Locally
 
 ```bash
 git clone https://github.com/hizzui/Dib.git

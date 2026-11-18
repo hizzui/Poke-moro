@@ -1,5 +1,5 @@
 """
-SQLite persistence for Dib user profile, focus sessions, and to-do items.
+SQLite persistence for Dib trainer profile, focus sessions, and quest tasks.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-from core import BASE_DIR, calculate_session_xp
+from core import BASE_DIR, LEGACY_KEY_MAP, calculate_session_xp
 
 DB_PATH = BASE_DIR / "data" / "dib.db"
 
@@ -27,7 +27,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
             """
             CREATE TABLE IF NOT EXISTS profile (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
-                companion TEXT NOT NULL DEFAULT 'coruja',
+                companion TEXT NOT NULL DEFAULT 'charmander',
                 total_xp INTEGER NOT NULL DEFAULT 0,
                 total_minutes INTEGER NOT NULL DEFAULT 0,
                 sessions_completed INTEGER NOT NULL DEFAULT 0,
@@ -41,7 +41,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
             INSERT OR IGNORE INTO profile (
                 id, companion, total_xp, total_minutes, sessions_completed, focus_duration, break_duration
             )
-            VALUES (1, 'coruja', 0, 0, 0, 25, 5);
+            VALUES (1, 'charmander', 0, 0, 0, 25, 5);
             """
         )
         conn.execute(
@@ -60,7 +60,12 @@ def get_profile(db_path: Path = DB_PATH) -> Dict[str, Any]:
     init_db(db_path)
     with get_conn(db_path) as conn:
         row = conn.execute("SELECT * FROM profile WHERE id = 1;").fetchone()
-        return dict(row)
+        data = dict(row)
+        if data.get("companion") in LEGACY_KEY_MAP:
+            mapped = LEGACY_KEY_MAP[data["companion"]]
+            conn.execute("UPDATE profile SET companion = ? WHERE id = 1;", (mapped,))
+            data["companion"] = mapped
+        return data
 
 
 def update_companion(companion_key: str, db_path: Path = DB_PATH) -> None:
