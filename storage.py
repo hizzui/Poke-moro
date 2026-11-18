@@ -1,5 +1,5 @@
 """
-SQLite persistence for Dib trainer profile, focus sessions, and quest tasks.
+SQLite persistence for Poke-moro trainer profile, focus sessions, and quest tasks.
 """
 
 from __future__ import annotations
