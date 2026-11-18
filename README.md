@@ -1,26 +1,21 @@
-# Poke-moro — Pokémon Pomodoro & Task Tracker
+# Poke-moro — Modern Anime Pokédex (Pure Python + Flet)
 
 <img width="736" height="414" alt="Poke-moro Banner" src="public/pokemoro_banner.jpg" />
 
-Gamified Pomodoro timer and task tracker built with **Python**, **Streamlit**, and **SQLite**, featuring animated Gen-V pixel-art Pokémon partners that level up and evolve as you complete focus sessions. Fully responsive across desktop and mobile viewports.
+Reactive anime-inspired Pokédex web and desktop application built **100% in Pure Python** using **Flet** and **HTTPX** (`PokéAPI v2`). Designed around a zero-flicker, single-init component tree with granular in-place property updates (`control.update()`), in-memory caching, and automatic neighbor preloading.
 
-## Features
+## Architecture & Highlights
 
-- **5 Partner Evolution Lines (15 Animated Sprites):**
-  - **Charmander** (Lv. 1) → **Charmeleon** (Lv. 5) → **Charizard** (Lv. 10)
-  - **Bulbasaur** (Lv. 1) → **Ivysaur** (Lv. 5) → **Venusaur** (Lv. 10)
-  - **Squirtle** (Lv. 1) → **Wartortle** (Lv. 5) → **Blastoise** (Lv. 10)
-  - **Pichu** (Lv. 1) → **Pikachu** (Lv. 5) → **Raichu** (Lv. 10)
-  - **Gastly** (Lv. 1) → **Haunter** (Lv. 5) → **Gengar** (Lv. 10)
-- **EXP & Evolution System:** Earn **10 EXP per focus minute** completed (`100 EXP` per level) and watch your partner evolve automatically in the Pokédex card.
-- **Mobile-Responsive UI:** Fluid `clamp()` timer typography, 2×2 touch-friendly control grid, 3-column compact stats bar, and an inline settings drawer so mobile users can switch Pokémon or adjust timer durations without opening a hidden sidebar.
-- **Local SQLite Persistence:** All trainer stats, active evolution line, and quest tasks are stored locally in `data/dib.db`.
+- **Zero-Flicker Reactive State:** Visual controls (`Container`, `Image`, `Text`, `ProgressBar`, and type badges) are instantiated only once on startup. Navigating between Pokémon mutates existing control properties in-place without calling `page.clean()` or rebuilding the DOM.
+- **Async Caching & Neighbor Preloading:** Uses `httpx.AsyncClient` with an in-memory dictionary cache (`POKEMON_CACHE`) and background preloading of `#id - 1` and `#id + 1` for instant navigation.
+- **Rotom-Phone Glassmorphism UI:** Centered single-page viewport with frosted glass blur (`ft.Blur`), dynamic radial background gradients that animate smoothly (`ft.Animation(400, "easeOut")`) based on the active Pokémon's primary type, and high-resolution official anime artwork (`official-artwork`).
+- **Complete Navigation:** Lateral `<` and `>` buttons, keyboard arrow shortcuts (`Arrow Left` / `Arrow Right`), quick-pick anime favorites, instant search by name or `#ID` with inline error handling, and a Random Pokémon button (`1–1025`).
 
 ## Running Locally
 
 ```bash
 git clone https://github.com/hizzui/Poke-moro.git
 cd Poke-moro
-pip install -r requirements.txt
-streamlit run app.py
+pip install flet httpx
+python main.py
 ```
