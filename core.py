@@ -1,5 +1,5 @@
 """
-Domain models, Pokémon partner evolution lines, and XP progression rules for Dib.
+Domain models, Pokémon partner evolution lines, and XP progression rules for Poke-moro.
 """
 
 from __future__ import annotations
